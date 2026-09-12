@@ -1,8 +1,24 @@
 import time
 import network
+import socket
 from machine import Pin, I2C
 import bme280_float as bme280
-from config import WIFI_SSID, WIFI_PASSWORD
+from config import WIFI_SSID, WIFI_PASSWORD, MAC_IP, MAC_PORT
+
+# This function sends sensor data to the Mac.
+# It sends the data as part of the URL (a GET request).
+def send_data(mac_ip, mac_port, temp, pressure, humidity):
+    try:
+        path = "/data?temp={}&pressure={}&humidity={}".format(temp, pressure, humidity)
+        addr = socket.getaddrinfo(mac_ip, mac_port)[0][-1]
+        s = socket.socket()
+        s.connect(addr)
+        request = "GET {} HTTP/1.0\r\nHost: {}\r\n\r\n".format(path, mac_ip)
+        s.send(request.encode())
+        s.close()
+        print("Data sent.")
+    except Exception as e:
+        print("Send failed:", e)
 
 # This function connects the board to WiFi.
 def connect_wifi():
@@ -37,6 +53,7 @@ def main():
     while True:
         temp, pressure, humidity = bme.values
         print("Temp:", temp, "Pressure:", pressure, "Humidity:", humidity)
+        send_data(MAC_IP, MAC_PORT, temp, pressure, humidity)
         time.sleep(10)
 
 main()
