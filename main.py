@@ -7,9 +7,9 @@ from config import WIFI_SSID, WIFI_PASSWORD, MAC_IP, MAC_PORT
 
 # This function sends sensor data to the Mac.
 # It sends the data as part of the URL (a GET request).
-def send_data(mac_ip, mac_port, temp, pressure, humidity):
+def send_data(mac_ip, mac_port, temp, pressure, humidity, wifi_rssi):
     try:
-        path = "/data?temp={}&pressure={}&humidity={}".format(temp, pressure, humidity)
+        path = "/data?temp={}&pressure={}&humidity={}&wifi_rssi={}".format(temp, pressure, humidity, wifi_rssi)
         addr = socket.getaddrinfo(mac_ip, mac_port)[0][-1]
         s = socket.socket()
         s.connect(addr)
@@ -20,7 +20,13 @@ def send_data(mac_ip, mac_port, temp, pressure, humidity):
     except Exception as e:
         print("Send failed:", e)
 
-# This function connects the board to WiFi.
+def get_wifi_rssi():
+    wlan = network.WLAN(network.STA_IF)
+    
+    if wlan.isconnected():
+        return wlan.status('rssi')  # value in dBm, -45
+    return None
+
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
@@ -52,8 +58,9 @@ def main():
     # Read the sensor every 10 seconds. Do this forever.
     while True:
         temp, pressure, humidity = bme.values
-        print("Temp:", temp, "Pressure:", pressure, "Humidity:", humidity)
-        send_data(MAC_IP, MAC_PORT, temp, pressure, humidity)
+        wifi_rssi = get_wifi_rssi()
+        print("Temp:", temp, "Pressure:", pressure, "Humidity:", humidity, "Wifi rssi:", wifi_rssi)
+        send_data(MAC_IP, MAC_PORT, temp, pressure, humidity, wifi_rssi)
         time.sleep(10)
 
 main()
