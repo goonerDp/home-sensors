@@ -1,0 +1,16 @@
+[project]
+name = "pi-hub"
+version = "0.1.0"
+description = "BLE central bridging the ESP32 outdoor sensor to the local network"
+readme = "README.md"
+authors = [
+    { name = "Volodymyr Stavytskyi", email = "stawolod@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "bleak>=3.0.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"

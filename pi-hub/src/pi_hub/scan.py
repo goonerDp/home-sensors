@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """List every BLE device the Pi can hear."""
 
 import asyncio
