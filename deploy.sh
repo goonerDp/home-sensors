@@ -19,11 +19,14 @@ fi
 PORT="${PORTS[0]}"
 echo "Found board at $PORT"
 
-FILES=("main.py" "config.py" "bme280_float.py")
+FILES=("main.py" "config.py" "bme280_float.py" "ble_sensor.py")
 
 for file in "${FILES[@]}"; do
     echo "Copying $file..."
     mpremote connect "$PORT" fs cp "$file" ":$file"
 done
+
+echo "Resetting board..."
+mpremote connect "$PORT" reset
 
 echo "Done."
