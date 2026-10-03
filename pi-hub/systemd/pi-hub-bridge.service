@@ -1,0 +1,25 @@
+[Unit]
+Description=BLE to MQTT bridge for the outdoor sensor node
+# Start after the network and the local broker are up. These are ordering
+# hints only: systemd will still start us if the broker is missing, and the
+# bridge reconnects on its own.
+After=network-online.target mosquitto.service bluetooth.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gooner_dp
+WorkingDirectory=/home/gooner_dp/projects/home-sensors/pi-hub
+ExecStart=/home/gooner_dp/projects/home-sensors/pi-hub/.venv/bin/pi-hub-bridge
+
+# Restart on any exit, including a clean one: this process is never
+# supposed to finish on its own.
+Restart=always
+RestartSec=10
+
+# Send stdout and stderr to journald, where the rest of the system logs go.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -17,3 +17,14 @@ ESP32 outdoor node over GATT.
 
 Address `48:9D:31:04:7F:1E`, advertised as `esp32-sensor`, exposing the
 standard Environmental Sensing service (0x181A).
+
+## Running as a service
+
+    sudo cp systemd/pi-hub-bridge.service /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now pi-hub-bridge
+
+Paths and `User=` in the unit assume `gooner_dp` and
+`~/projects/home-sensors`. Edit both if either differs.
+
+    journalctl -u pi-hub-bridge -f
