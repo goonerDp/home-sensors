@@ -55,12 +55,12 @@ async def read_sample(address: str) -> dict | None:
         raw_humid = await client.read_gatt_char(HUMID_UUID)
         raw_press = await client.read_gatt_char(PRESS_UUID)
 
-    # "<h" signed 16-bit, "<H" unsigned 16-bit, "<I" unsigned 32-bit,
-    # all little-endian - the wire format each SIG characteristic defines.
+    # Round to the sensor's real accuracy: BME280 is +-0.5C, +-3%RH, +-1hPa.
+    # Keeping more digits would imply precision the hardware does not have.
     return {
-        "temperature_c": struct.unpack("<h", raw_temp)[0] / 100,
-        "humidity_pct": struct.unpack("<H", raw_humid)[0] / 100,
-        "pressure_hpa": struct.unpack("<I", raw_press)[0] / 1000,
+        "temperature_c": round(struct.unpack("<h", raw_temp)[0] / 100, 2),
+        "humidity_pct": round(struct.unpack("<H", raw_humid)[0] / 100, 1),
+        "pressure_hpa": round(struct.unpack("<I", raw_press)[0] / 1000, 1),
         "rssi_dbm": adv.rssi,
     }
 

@@ -41,6 +41,9 @@ async def announce_online(client: aiomqtt.Client) -> None:
     """Overwrite whatever the will left behind on the previous run."""
     await client.publish(TOPIC_STATUS, STATUS_ONLINE, qos=1, retain=True)
 
+async def announce_offline(client: aiomqtt.Client) -> None:
+    """Publish the same payload the will would have, on a clean shutdown."""
+    await client.publish(TOPIC_STATUS, STATUS_OFFLINE, qos=1, retain=True)
 
 async def publish_sample(client: aiomqtt.Client, sample: dict) -> None:
     # Copy before adding the timestamp: the caller's dict stays untouched.

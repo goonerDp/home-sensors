@@ -2,10 +2,17 @@
 
 import asyncio
 import logging
+import signal
 
 import aiomqtt
 
-from pi_hub.mqtt import announce_online, make_client, publish_sample
+from pi_hub.mqtt import (
+    BROKER_HOST,
+    announce_offline,
+    announce_online,
+    make_client,
+    publish_sample,
+)
 from pi_hub.read_sensor import DEVICE_ADDRESS, read_sample
 
 POLL_INTERVAL_S = 60
@@ -15,46 +22,79 @@ RECONNECT_DELAY_S = 5
 log = logging.getLogger(__name__)
 
 
-async def poll_loop(client: aiomqtt.Client, address: str) -> None:
-    """Read and publish on a schedule, until the MQTT connection breaks."""
+async def wait_or_stop(stop: asyncio.Event, delay: float) -> bool:
+    """Sleep for 'delay', or return early if a shutdown was requested.
+
+    Returns True when the wait was cut short by the stop signal, so callers
+    can react immediately instead of finishing a full poll interval first.
+    """
+    try:
+        await asyncio.wait_for(stop.wait(), timeout=delay)
+        return True
+    except TimeoutError:
+        return False
+
+
+async def poll_loop(client: aiomqtt.Client, address: str, stop: asyncio.Event) -> None:
+    """Read and publish on a schedule, until stopped or MQTT breaks."""
     await announce_online(client)
 
-    while True:
+    while not stop.is_set():
         try:
             sample = await read_sample(address)
         except Exception:
             # A BLE failure is expected now and then; it must not tear down
             # the MQTT session, so it is swallowed here rather than raised.
             log.exception("BLE read failed")
-            await asyncio.sleep(RETRY_DELAY_S)
+            if await wait_or_stop(stop, RETRY_DELAY_S):
+                return
             continue
 
         if sample is None:
             log.warning("Device %s not in range", address)
-            await asyncio.sleep(RETRY_DELAY_S)
+            if await wait_or_stop(stop, RETRY_DELAY_S):
+                return
             continue
 
         await publish_sample(client, sample)
         log.info(
-            "temp=%.2fC humidity=%.2f%% pressure=%.1fhPa rssi=%ddBm",
+            "temp=%.2fC humidity=%.1f%% pressure=%.1fhPa rssi=%ddBm",
             sample["temperature_c"],
             sample["humidity_pct"],
             sample["pressure_hpa"],
             sample["rssi_dbm"],
         )
-        await asyncio.sleep(POLL_INTERVAL_S)
+        if await wait_or_stop(stop, POLL_INTERVAL_S):
+            return
 
 
-async def run(address: str) -> None:
+async def run(address: str, stop: asyncio.Event) -> None:
     """Keep an MQTT session open, reconnecting if the broker goes away."""
-    while True:
+    while not stop.is_set():
         try:
             async with make_client() as client:
-                log.info("Connected to MQTT broker at %s", client._hostname)
-                await poll_loop(client, address)
+                log.info("Connected to MQTT broker at %s", BROKER_HOST)
+                await poll_loop(client, address, stop)
+                # Only reached on a clean shutdown: overwrite the retained
+                # status so subscribers are not left thinking we are alive.
+                await announce_offline(client)
         except aiomqtt.MqttError:
             log.warning("MQTT connection lost, retrying in %ds", RECONNECT_DELAY_S)
-            await asyncio.sleep(RECONNECT_DELAY_S)
+            if await wait_or_stop(stop, RECONNECT_DELAY_S):
+                return
+
+
+async def amain() -> None:
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    # Ctrl+C sends SIGINT, 'systemctl stop' sends SIGTERM. Both should end
+    # the same way, so neither is left to the default handler.
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+
+    await run(DEVICE_ADDRESS, stop)
+    log.info("Stopped")
 
 
 def main() -> None:
@@ -63,10 +103,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S",
     )
-    try:
-        asyncio.run(run(DEVICE_ADDRESS))
-    except KeyboardInterrupt:
-        log.info("Stopped")
+    asyncio.run(amain())
 
 
 if __name__ == "__main__":
