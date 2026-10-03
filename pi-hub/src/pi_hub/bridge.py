@@ -1,25 +1,31 @@
-"""Poll the ESP32 sensor node over BLE at a fixed interval."""
+"""Poll the ESP32 sensor node over BLE and publish readings to MQTT."""
 
 import asyncio
 import logging
 
+import aiomqtt
+
+from pi_hub.mqtt import announce_online, make_client, publish_sample
 from pi_hub.read_sensor import DEVICE_ADDRESS, read_sample
 
 POLL_INTERVAL_S = 60
 RETRY_DELAY_S = 10
+RECONNECT_DELAY_S = 5
 
 log = logging.getLogger(__name__)
 
 
-async def poll_forever(address: str) -> None:
-    """Read the sensor on a schedule, surviving transient BLE failures."""
+async def poll_loop(client: aiomqtt.Client, address: str) -> None:
+    """Read and publish on a schedule, until the MQTT connection breaks."""
+    await announce_online(client)
+
     while True:
         try:
             sample = await read_sample(address)
         except Exception:
-            # exception() logs the full traceback, so a failure mode that
-            # repeats can be identified from the log alone.
-            log.exception("Read failed")
+            # A BLE failure is expected now and then; it must not tear down
+            # the MQTT session, so it is swallowed here rather than raised.
+            log.exception("BLE read failed")
             await asyncio.sleep(RETRY_DELAY_S)
             continue
 
@@ -28,6 +34,7 @@ async def poll_forever(address: str) -> None:
             await asyncio.sleep(RETRY_DELAY_S)
             continue
 
+        await publish_sample(client, sample)
         log.info(
             "temp=%.2fC humidity=%.2f%% pressure=%.1fhPa rssi=%ddBm",
             sample["temperature_c"],
@@ -38,6 +45,18 @@ async def poll_forever(address: str) -> None:
         await asyncio.sleep(POLL_INTERVAL_S)
 
 
+async def run(address: str) -> None:
+    """Keep an MQTT session open, reconnecting if the broker goes away."""
+    while True:
+        try:
+            async with make_client() as client:
+                log.info("Connected to MQTT broker at %s", client._hostname)
+                await poll_loop(client, address)
+        except aiomqtt.MqttError:
+            log.warning("MQTT connection lost, retrying in %ds", RECONNECT_DELAY_S)
+            await asyncio.sleep(RECONNECT_DELAY_S)
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -45,7 +64,7 @@ def main() -> None:
         datefmt="%Y-%m-%dT%H:%M:%S",
     )
     try:
-        asyncio.run(poll_forever(DEVICE_ADDRESS))
+        asyncio.run(run(DEVICE_ADDRESS))
     except KeyboardInterrupt:
         log.info("Stopped")
 
