@@ -68,3 +68,49 @@ is documented in `../esp32/README.md`.
 
 Paths and `User=` in the unit assume `gooner_dp` and
 `~/projects/home-sensors`. Edit both if either differs.
+
+
+## Storage
+
+Readings are recorded to `data/sensors.db` (SQLite, not in git) by a
+second service subscribing to the same MQTT topic. Schema in
+`schema.sql`; it is applied on every start, so the file is created on
+first run.
+
+Timestamps are stored in UTC. `recorded_at` is unique and inserts use
+`OR IGNORE`, so a recorder restart does not duplicate the retained
+sample it receives on subscribe.
+
+    sqlite3 -header -box data/sensors.db \
+      "SELECT datetime(recorded_at, 'localtime') AS local, temperature_c
+       FROM readings ORDER BY id DESC LIMIT 10"
+
+## Running as a service
+
+    sudo cp systemd/*.service /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now pi-hub-bridge pi-hub-recorder
+    journalctl -u pi-hub-bridge -u pi-hub-recorder -f
+
+Paths and `User=` in the units assume `gooner_dp` and
+`~/projects/home-sensors`. Edit both if either differs.
+
+Per-sample logging is at `DEBUG`; set `LOG_LEVEL=DEBUG` in the unit or
+the environment to see it.
+
+Sanity checks:
+
+    # Row count and the range actually covered
+    sqlite3 data/sensors.db \
+      "SELECT COUNT(*), MIN(recorded_at), MAX(recorded_at) FROM readings"
+
+    # Gaps longer than one poll interval - the node was out of range,
+    # or a service was down
+    sqlite3 -header -box data/sensors.db \
+      "SELECT datetime(recorded_at, 'localtime') AS local,
+              ROUND((julianday(recorded_at) -
+                     julianday(LAG(recorded_at) OVER (ORDER BY recorded_at)))
+                    * 86400) AS gap_s
+       FROM readings
+       ORDER BY recorded_at DESC
+       LIMIT 20"
