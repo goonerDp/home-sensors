@@ -29,7 +29,7 @@ def insert_reading(conn: sqlite3.Connection, sample: dict) -> None:
     """Store one sample. The caller's timestamp is kept as-is."""
     conn.execute(
         """
-        INSERT INTO readings
+        INSERT OR IGNORE INTO readings
             (recorded_at, temperature_c, humidity_pct, pressure_hpa, rssi_dbm)
         VALUES
             (:timestamp, :temperature_c, :humidity_pct, :pressure_hpa, :rssi_dbm)
