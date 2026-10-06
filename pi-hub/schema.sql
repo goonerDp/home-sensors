@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS readings (
 );
 
 -- Every query will be "readings in a time range", so the timestamp needs
--- an index of its own; the primary key only helps with insertion order.
-CREATE INDEX IF NOT EXISTS idx_readings_recorded_at
+-- an index of its own. UNIQUE also makes the insert idempotent: the hub
+-- republishes its last sample as a retained message, so a recorder
+-- restart would otherwise store the same reading twice.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_readings_recorded_at
     ON readings (recorded_at);

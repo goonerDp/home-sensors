@@ -18,3 +18,4 @@ build-backend = "uv_build"
 
 [project.scripts]
 pi-hub-bridge = "pi_hub.bridge:main"
+pi-hub-recorder = "pi_hub.recorder:main"

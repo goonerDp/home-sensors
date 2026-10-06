@@ -1,0 +1,17 @@
+[Unit]
+Description=Record sensor readings from MQTT to SQLite
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gooner_dp
+WorkingDirectory=/home/gooner_dp/projects/home-sensors/pi-hub
+ExecStart=/home/gooner_dp/projects/home-sensors/pi-hub/.venv/bin/pi-hub-recorder
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
