@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import signal
+import os
 
 import aiomqtt
 
@@ -57,7 +58,7 @@ async def poll_loop(client: aiomqtt.Client, address: str, stop: asyncio.Event) -
             continue
 
         await publish_sample(client, sample)
-        log.info(
+        log.debug(
             "temp=%.2fC humidity=%.1f%% pressure=%.1fhPa rssi=%ddBm",
             sample["temperature_c"],
             sample["humidity_pct"],
@@ -99,7 +100,8 @@ async def amain() -> None:
 
 def main() -> None:
     logging.basicConfig(
-        level=logging.INFO,
+        # LOG_LEVEL=DEBUG turns on per-sample logging without a code change.
+        level=os.environ.get("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S",
     )

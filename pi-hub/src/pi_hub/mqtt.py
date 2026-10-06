@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aiomqtt
 
@@ -48,7 +48,7 @@ async def announce_offline(client: aiomqtt.Client) -> None:
 async def publish_sample(client: aiomqtt.Client, sample: dict) -> None:
     # Copy before adding the timestamp: the caller's dict stays untouched.
     payload = dict(sample)
-    payload["timestamp"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    payload["timestamp"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     # retain=True so a subscriber that connects later gets the last reading
     # immediately instead of waiting a full poll interval for the next one.
