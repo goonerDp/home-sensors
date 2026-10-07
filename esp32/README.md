@@ -70,3 +70,22 @@ Erase and reflash MicroPython firmware:
 
     esptool --port /dev/cu.usbserial-XXX erase-flash
     esptool --port /dev/cu.usbserial-XXX write-flash -z 0x1000 <firmware>.bin
+
+Only one session can hold the serial port. Close the REPL (`Ctrl-]`)
+before any `fs` command or `deploy.sh`, or they fail with
+`TransportError: could not enter raw repl`.
+
+## Diagnostics
+
+The measurement loop catches read failures instead of dying on them, and
+appends each one to `errors.log` in flash, with `time.ticks_ms()` since
+boot as the only timestamp available on a board with no clock. A `boot`
+line is written at startup, so an unexpected one marks a reset.
+
+Serial output is useless once the node runs on battery, which is why
+this goes to a file.
+
+    mpremote connect /dev/cu.usbserial-XXX fs cat :errors.log
+    mpremote connect /dev/cu.usbserial-XXX fs rm :errors.log
+
+The file is truncated past 8 KB.
