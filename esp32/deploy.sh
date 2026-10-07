@@ -27,7 +27,7 @@ fi
 PORT="${PORTS[0]}"
 echo "Found board at $PORT"
 
-FILES=("main.py" "config.py" "bme280_float.py" "ble_sensor.py")
+FILES=("main.py" "bme280_float.py" "ble_sensor.py")
 
 # Check everything is present before touching the board, so a missing file
 # cannot leave it with a half-updated set of modules.
