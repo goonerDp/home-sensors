@@ -29,8 +29,10 @@ def log_error(message):
     battery can still be read back over USB days later.
 
     Prints go to the serial console, which nobody is watching when the node is
-    deployed. The file is truncated once it grows past a few KB: the first
-    failures are the interesting ones, and flash here is small.
+    deployed. Once the file grows past a few KB, writing stops rather than
+    starting over: the first failures are the interesting ones, and a failure
+    that repeats every loop would otherwise wipe them within minutes. Delete
+    the file over USB to start a fresh log.
     """
     line = "{} {}\n".format(time.ticks_ms(), message)
     print(line, end="")
@@ -43,8 +45,9 @@ def log_error(message):
         except OSError:
             pass
 
-        mode = "w" if size > ERROR_LOG_MAX_BYTES else "a"
-        with open(ERROR_LOG, mode) as f:
+        if size > ERROR_LOG_MAX_BYTES:
+            return
+        with open(ERROR_LOG, "a") as f:
             f.write(line)
     except OSError as exc:
         # Logging must never be the thing that takes the node down.
@@ -78,21 +81,20 @@ def main():
             # read_compensated_data() returns floats: C, Pa, %RH.
             # The .values property returns formatted strings instead.
             temp_c, pressure_pa, humidity_pct = bme.read_compensated_data()
-        except Exception as exc:
-            # Carry on. Before this, one bad read ended main() for good while
-            # the BLE stack kept serving the last values it had, which looked
-            # like a working node for ten hours.
-            #
-            # The full traceback is worth the extra lines: read_compensated_data
-            # makes several I2C calls, and which one failed narrows the cause.
-            log_error("read failed:\n" + format_exception(exc))
-        else:
             ble.update(temp_c, pressure_pa, humidity_pct)
             print(
                 "temp={:.2f}C  pressure={:.1f}hPa  humidity={:.2f}%".format(
                     temp_c, pressure_pa / 100, humidity_pct
                 )
             )
+        except Exception as exc:
+            # Carry on, whatever failed. An exception anywhere in this loop
+            # ends main() for good while the BLE stack keeps serving the last
+            # values it had, which looks like a working node for hours.
+            #
+            # The full traceback says which call failed: one of the several
+            # I2C calls inside the sensor read, or the BLE write.
+            log_error("loop failed:\n" + format_exception(exc))
 
         time.sleep(READ_INTERVAL_S)
 

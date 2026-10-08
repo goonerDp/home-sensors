@@ -29,8 +29,8 @@ Advertised as `esp32-sensor`, standard Environmental Sensing service
 Standard SIG characteristics, so any generic BLE app on a phone reads
 the node without knowing anything about this project.
 
-Readings are refreshed every 10 s and pushed to connected subscribers
-via notify.
+Readings are refreshed every 10 s and are read-only: there is no notify,
+since the hub connects, reads and disconnects.
 
 ## Wiring
 
@@ -88,4 +88,5 @@ this goes to a file.
     mpremote connect /dev/cu.usbserial-XXX fs cat :errors.log
     mpremote connect /dev/cu.usbserial-XXX fs rm :errors.log
 
-The file is truncated past 8 KB.
+Writing stops once the file passes 8 KB, so the first failures are kept;
+remove it to start a fresh log.

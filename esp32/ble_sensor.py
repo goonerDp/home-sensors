@@ -19,7 +19,7 @@ _ENV_SENSE_UUID = bluetooth.UUID(0x181A)
 #   0x2A6E Temperature - sint16, unit 0.01 C
 #   0x2A6F Humidity    - uint16, unit 0.01 %
 #   0x2A6D Pressure    - uint32, unit 0.1 Pa
-_FLAGS = bluetooth.FLAG_READ | bluetooth.FLAG_NOTIFY
+_FLAGS = bluetooth.FLAG_READ
 _TEMP_CHAR = (bluetooth.UUID(0x2A6E), _FLAGS)
 _HUMID_CHAR = (bluetooth.UUID(0x2A6F), _FLAGS)
 _PRESS_CHAR = (bluetooth.UUID(0x2A6D), _FLAGS)
@@ -75,7 +75,6 @@ class BLESensor:
             (_ENV_SENSE_SERVICE,)
         )
 
-        self._connections = set()
         self._payload = build_adv_payload(name=name, services=[_ENV_SENSE_UUID])
         self._advertise()
         print("BLE up | name:", name, "| mac:", self.mac())
@@ -89,27 +88,24 @@ class BLESensor:
         """Called from the BLE stack. Keep it short - it runs in an IRQ context."""
         if event == _IRQ_CENTRAL_CONNECT:
             conn_handle, _, _ = data
-            self._connections.add(conn_handle)
             print("central connected:", conn_handle)
         elif event == _IRQ_CENTRAL_DISCONNECT:
             conn_handle, _, _ = data
-            self._connections.discard(conn_handle)
             print("central disconnected:", conn_handle)
             # Advertising stops on connect, so restart it to stay findable.
             self._advertise()
 
-    def update(self, temp_c, pressure_pa, humidity_pct, notify=True):
-        """Write the latest readings into the GATT table, in SIG wire format."""
+    def update(self, temp_c, pressure_pa, humidity_pct):
+        """Write the latest readings into the GATT table, in SIG wire format.
+
+        A read always returns whatever was last written. There are no
+        notifies: the hub connects, reads and disconnects, so nobody is ever
+        subscribed, and notifying a central that had just disconnected was a
+        way to raise from here.
+        """
         self._ble.gatts_write(self._temp_h, struct.pack("<h", int(round(temp_c * 100))))
         self._ble.gatts_write(self._humid_h, struct.pack("<H", int(round(humidity_pct * 100))))
         self._ble.gatts_write(self._press_h, struct.pack("<I", int(round(pressure_pa * 10))))
-
-        # A read always returns whatever was last written. A notify additionally
-        # pushes the value to anyone currently connected and subscribed.
-        if notify:
-            for conn_handle in self._connections:
-                for handle in (self._temp_h, self._humid_h, self._press_h):
-                    self._ble.gatts_notify(conn_handle, handle)
 
     def _advertise(self, interval_us=250_000):
         """250 ms between packets: quick to discover, fine while debugging."""
