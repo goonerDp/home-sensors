@@ -12,6 +12,7 @@ import sys
 import time
 
 import bluetooth
+import machine
 from machine import I2C, Pin
 
 import bme280_float as bme280
@@ -22,6 +23,15 @@ READ_INTERVAL_S = 10
 
 ERROR_LOG = "errors.log"
 ERROR_LOG_MAX_BYTES = 8192
+
+# machine.reset_cause() returns a bare int; these are the names it can match.
+RESET_CAUSES = (
+    "PWRON_RESET",
+    "HARD_RESET",
+    "WDT_RESET",
+    "DEEPSLEEP_RESET",
+    "SOFT_RESET",
+)
 
 
 def log_error(message):
@@ -71,10 +81,25 @@ def init_sensor():
     return bme280.BME280(i2c=i2c)
 
 
+def reset_cause_name():
+    """Why this boot happened, as a name rather than a bare number.
+
+    Tells a restart nobody asked for (watchdog, crash) apart from someone
+    plugging the board in.
+    """
+    cause = machine.reset_cause()
+    for name in RESET_CAUSES:
+        if getattr(machine, name, None) == cause:
+            return name
+    return str(cause)
+
+
 def main():
+    # Logged before anything else, so a boot that dies during setup still
+    # leaves a line behind.
+    log_error("boot " + reset_cause_name())
     bme = init_sensor()
     ble = BLESensor(bluetooth.BLE(), name=DEVICE_NAME)
-    log_error("boot")
 
     while True:
         try:
